@@ -14,10 +14,12 @@
     homeownerAnswerId: "a2f8b4ab-f96c-11e4-824b-22000a699fb3",
     propertyTypeAnswerId: "128a72ad-041e-11ed-a6b2-062f1bcd6de3",
     postcodeAnswerKey: "answers[primary_address_postalcode]",
+    blockExistingRedirect: true,
   };
 
   var LOG_PREFIX = "[CRO-674 Eco Audit]";
   var alreadyApplied = false;
+  var controlledRedirectValue = "";
 
   function log() {
     if (!CONFIG.debug) return;
@@ -70,6 +72,56 @@
       }
     }
     return {};
+  }
+
+  function installRedirectGuard() {
+    if (!CONFIG.blockExistingRedirect) return;
+    try {
+      Object.defineProperty(window, "redirectUrlAfterSubmission", {
+        configurable: true,
+        enumerable: true,
+        get: function () {
+          return controlledRedirectValue;
+        },
+        set: function (value) {
+          // Block existing redirect writes from page/chameleon scripts.
+          log("Blocked external redirect assignment:", value);
+        },
+      });
+      controlledRedirectValue = "";
+      window.redirectUrlAfterSubmission = "";
+    } catch (e) {
+      // If defineProperty fails, fallback to blanking current value.
+      controlledRedirectValue = "";
+      try {
+        window.redirectUrlAfterSubmission = "";
+      } catch (_) {
+        /* no-op */
+      }
+    }
+  }
+
+  function setControlledRedirect(url) {
+    controlledRedirectValue = toString(url);
+    try {
+      // Re-define with same guard semantics but updated internal value.
+      Object.defineProperty(window, "redirectUrlAfterSubmission", {
+        configurable: true,
+        enumerable: true,
+        get: function () {
+          return controlledRedirectValue;
+        },
+        set: function (value) {
+          log("Blocked external redirect assignment:", value);
+        },
+      });
+    } catch (e) {
+      try {
+        window.redirectUrlAfterSubmission = controlledRedirectValue;
+      } catch (_) {
+        /* no-op */
+      }
+    }
   }
 
   function lookupLocationFromPostcode(postcode) {
@@ -189,7 +241,7 @@
         };
 
         var redirectUrl = buildEcoAuditUrl(payload);
-        window.redirectUrlAfterSubmission = redirectUrl;
+        setControlledRedirect(redirectUrl);
         alreadyApplied = true;
 
         window.dataLayer = window.dataLayer || [];
@@ -233,5 +285,6 @@
     }
   }
 
+  installRedirectGuard();
   attachDataLayerListener();
 })();
