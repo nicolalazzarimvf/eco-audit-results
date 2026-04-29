@@ -3,7 +3,7 @@
 
   var CONFIG = {
     ecoAuditUrl:
-      window.__ECO_AUDIT_TYP_URL__ || "https://eco-audit.vercel.app/",
+      window.__ECO_AUDIT_TYP_URL__ || "https://eco-audit-ebon.vercel.app/",
     // Optional endpoint returning { uprn, lat, lng, address, paon, street } for postcode.
     // Example: https://example.com/location-lookup?postcode=SW1A1AA
     locationLookupEndpoint: window.__ECO_AUDIT_LOOKUP_ENDPOINT__ || "",
