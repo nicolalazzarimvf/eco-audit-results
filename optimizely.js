@@ -216,6 +216,31 @@
     return url.toString();
   }
 
+  // Chameleon thankYou redirect logic always appends `?sid=...&fid=...` to redirectUrlAfterSubmission.
+  // To avoid malformed URLs (`...?foo=bar?sid=...`), we keep redirectUrlAfterSubmission query-less
+  // and push Eco Audit params into the host page URL first, so Chameleon forwards them.
+  function buildChameleonCompatibleRedirect(data) {
+    var target = new URL(CONFIG.ecoAuditUrl);
+    target.search = "";
+    target.hash = "";
+
+    var current = new URL(window.location.href);
+    if (data.uprn) current.searchParams.set("uprn", data.uprn);
+    if (data.lat) current.searchParams.set("lat", data.lat);
+    if (data.lng) current.searchParams.set("lng", data.lng);
+    if (data.address) current.searchParams.set("address", data.address);
+    if (data.postcode) current.searchParams.set("postcode", data.postcode);
+    if (data.paon) current.searchParams.set("paon", data.paon);
+    if (data.street) current.searchParams.set("street", data.street);
+    if (data.bill) current.searchParams.set("bill", data.bill);
+    current.searchParams.set("hev", data.hev || "0");
+    current.searchParams.set("src", "optimizely");
+
+    // Replace URL without reloading to let Chameleon copy these params.
+    window.history.replaceState({}, "", current.toString());
+    return target.toString();
+  }
+
   function isSubmissionEvent(eventObj) {
     return eventObj && eventObj.event === "webform_submission_completed";
   }
@@ -249,7 +274,7 @@
       bill: parseMonthlyBill(billRaw),
       hev: asBoolean01(hasEvRaw),
     };
-    setControlledRedirect(buildEcoAuditUrl(immediatePayload));
+    setControlledRedirect(buildChameleonCompatibleRedirect(immediatePayload));
     log("Immediate postcode-only redirect set", immediatePayload);
     captureDebugEvent("postcode-only-redirect", immediatePayload);
     alreadyApplied = true;
@@ -272,7 +297,7 @@
           hev: asBoolean01(hasEvRaw),
         };
 
-        var redirectUrl = buildEcoAuditUrl(payload);
+        var redirectUrl = buildChameleonCompatibleRedirect(payload);
         setControlledRedirect(redirectUrl);
         log("Redirect upgraded with lookup data", payload);
         captureDebugEvent("lookup-redirect", payload);
