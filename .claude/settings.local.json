@@ -1,0 +1,36 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx serve *)",
+      "Bash(curl -s http://localhost:4321/preview)",
+      "mcp__Control_Chrome__list_tabs",
+      "mcp__Control_Chrome__switch_to_tab",
+      "mcp__Control_Chrome__get_page_content",
+      "mcp__Claude_in_Chrome__tabs_context_mcp",
+      "mcp__Claude_in_Chrome__navigate",
+      "mcp__Claude_in_Chrome__computer",
+      "Bash(npm run *)",
+      "Bash(npm install *)",
+      "Bash(mkdir -p /tmp/cro674-app)",
+      "Bash(cp -r \"/Users/studioai/workspace-remote/MVF/CRO-674 | Eco Audit Results Page/app/.\" /tmp/cro674-app/)",
+      "Read(//tmp/**)",
+      "mcp__Claude_in_Chrome__get_page_text",
+      "Bash(node --trace-warnings node_modules/.bin/next dev)",
+      "Bash(curl -s \"http://localhost:3000/?uprn=100070452491&lat=52.4341337&lng=-1.9717089&postcode=B29+5NJ\")",
+      "Bash(node -e ' *)",
+      "Bash(node_modules/.bin/next build *)",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(NODE_OPTIONS=\"--localstorage-file=/tmp/cro674-ls.json\" node_modules/.bin/next dev)",
+      "Bash(curl -s \"http://localhost:3000/?uprn=100070452491&lat=52.4341337&lng=-1.9717089&postcode=B29+5NJ&address=65+Milcote+Road\")",
+      "Bash(curl -s \"http://localhost:3000/?uprn=100070452491&lat=52.4341337&lng=-1.9717089&address=65+Milcote+Road&postcode=B29+5NJ&paon=65\")",
+      "mcp__Claude_in_Chrome__javascript_tool",
+      "Bash(curl -sv http://localhost:4321/preview)",
+      "Bash(kill 1579)",
+      "Bash(python3 -m http.server 4321)",
+      "Bash(curl -s http://localhost:4321/preview.html)",
+      "Bash(ipconfig getifaddr *)",
+      "Bash(/usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate)",
+      "Bash(curl -s http://127.0.0.1:4321/preview.html)"
+    ]
+  }
+}

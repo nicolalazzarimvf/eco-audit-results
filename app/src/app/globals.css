@@ -1,0 +1,39 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg: #e8f6fc;
+  --surface: #f0f9fd;
+  --surface-2: #fafdfe;
+  --border: #d1e8f8;
+  --text: #053c5e;
+  --muted: #565660;
+  --accent: #04ab49;
+  --accent-dim: #037934;
+  --warn: #ff9a00;
+  --danger: #ed2012;
+  --info: #0075ff;
+  --card-shadow: 0 12px 16px -8px rgba(2, 25, 39, 0.2);
+  --band-a: #2d9d57;
+  --band-b: #64b847;
+  --band-c: #c8d400;
+  --band-d: #ffb800;
+  --band-e: #f97316;
+  --band-f: #ef4444;
+  --band-g: #b91c1c;
+}
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.63;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Thank You – TheECExperts</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; background: #f5f5f5; color: #333; }
+    header { background: #1a3c5e; color: #fff; padding: 16px 24px; }
+    header span { font-size: 20px; font-weight: bold; }
+    .page { max-width: 640px; margin: 60px auto; background: #fff; border-radius: 8px; padding: 48px 40px; text-align: center; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+    .checkmark { font-size: 56px; margin-bottom: 16px; }
+    h1 { font-size: 28px; margin-bottom: 12px; color: #1a3c5e; }
+    p { font-size: 16px; line-height: 1.6; color: #555; margin-bottom: 8px; }
+    .ref { font-size: 13px; color: #999; margin-top: 24px; }
+
+    /* Debug panel */
+    #debug { position: fixed; bottom: 0; left: 0; right: 0; background: #111; color: #0f0; font: 12px/1.5 monospace; padding: 10px 16px; max-height: 180px; overflow-y: auto; z-index: 9999; }
+    #debug .label { color: #aaa; }
+  </style>
+</head>
+<body id="thank-you">
+
+  <header>
+    <span>TheECExperts</span>
+  </header>
+
+  <div class="page">
+    <div class="checkmark">✅</div>
+    <h1>Thank you, Jane!</h1>
+    <p>Your appointment has been booked.</p>
+    <p>Our energy expert will be in touch shortly to confirm the details.</p>
+    <p class="ref">Reference: 1028313458</p>
+  </div>
+
+  <!-- Simulated GTM dataLayer (shape B) -->
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    window.dataLayer.push({
+      event: "appointment_confirmed",
+      submission_id: "1028313458",
+      status: "successful",
+      reason: "booking_confirmed",
+      lead: {
+        first_name: "Jane",
+        last_name: "Smith",
+        postcode: "B29 5NJ",
+        email: "jane@example.com",
+        phone_number: "+447700900000",
+        address: "65 Milcote Road, Birmingham, B29 5NJ"
+      },
+      appointment_form: {
+        is_over_75: false,
+        roof_works_planned: false,
+        income_over_15k: true,
+        likely_to_pass_credit_check: true
+      }
+    });
+  </script>
+
+  <!-- Debug panel: shows console logs from the Optimizely script -->
+  <div id="debug"><span class="label">console:</span></div>
+  <script>
+    (function () {
+      var panel = document.getElementById("debug");
+      var orig = console.log.bind(console);
+      console.log = function () {
+        orig.apply(console, arguments);
+        var line = document.createElement("div");
+        line.textContent = Array.prototype.slice.call(arguments).join(" ");
+        panel.appendChild(line);
+        panel.scrollTop = panel.scrollHeight;
+      };
+    })();
+  </script>
+
+  <!-- Local preview override — point iframe at local Next.js dev server -->
+  <script>window.__PREVIEW_TYP_URL__ = "http://172.20.10.7:3000/";</script>
+
+  <!-- Optimizely experiment script -->
+  <script src="optimizely.js"></script>
+
+</body>
+</html>
