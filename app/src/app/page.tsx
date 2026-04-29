@@ -17,16 +17,42 @@ function sp(val: string | string[] | undefined): string {
   return Array.isArray(val) ? val[0] ?? "" : val ?? "";
 }
 
+async function resolveCoordinatesFromPostcode(postcode: string): Promise<{ lat: number; lng: number } | null> {
+  const compact = postcode.replace(/\s+/g, "").toUpperCase();
+  if (!compact) return null;
+  try {
+    const res = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(compact)}`, {
+      next: { revalidate: 60 * 60 },
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    const lat = Number(json?.result?.latitude ?? 0);
+    const lng = Number(json?.result?.longitude ?? 0);
+    if (!lat || !lng) return null;
+    return { lat, lng };
+  } catch {
+    return null;
+  }
+}
+
 export default async function Page({ searchParams }: PageProps) {
   const params = await searchParams;
 
   const uprn = sp(params.uprn);
-  const lat = parseFloat(sp(params.lat) || "0");
-  const lng = parseFloat(sp(params.lng) || "0");
+  let lat = parseFloat(sp(params.lat) || "0");
+  let lng = parseFloat(sp(params.lng) || "0");
   const address = sp(params.address);
   const postcode = sp(params.postcode);
   const paon = sp(params.paon) || address.split(" ")[0];
   const street = sp(params.street) || address.replace(/^\S+\s+/, "");
+
+  if ((!lat || !lng) && postcode) {
+    const fallbackCoords = await resolveCoordinatesFromPostcode(postcode);
+    if (fallbackCoords) {
+      lat = fallbackCoords.lat;
+      lng = fallbackCoords.lng;
+    }
+  }
 
   if (!lat || !lng) {
     return (

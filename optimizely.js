@@ -221,11 +221,24 @@
 
     var billRaw = answers["answers[" + CONFIG.billAnswerId + "]"] || "";
     var hasEvRaw = answers["answers[" + CONFIG.hasEvAnswerId + "]"] || "";
+    var immediatePayload = {
+      uprn: "",
+      lat: "",
+      lng: "",
+      address: "",
+      postcode: postcode,
+      paon: "",
+      street: "",
+      bill: parseMonthlyBill(billRaw),
+      hev: asBoolean01(hasEvRaw),
+    };
+    setControlledRedirect(buildEcoAuditUrl(immediatePayload));
+    alreadyApplied = true;
 
     lookupLocationFromPostcode(postcode)
       .then(function (location) {
         if (!location.lat || !location.lng) {
-          log("Location lookup did not return lat/lng. Keeping default TYP.");
+          log("Location lookup did not return lat/lng. Using postcode-only redirect.");
           return;
         }
         var payload = {
@@ -242,7 +255,6 @@
 
         var redirectUrl = buildEcoAuditUrl(payload);
         setControlledRedirect(redirectUrl);
-        alreadyApplied = true;
 
         window.dataLayer = window.dataLayer || [];
         var opty = getOptimizelyInfo();
