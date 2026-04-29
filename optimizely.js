@@ -1,6 +1,13 @@
 (function () {
   "use strict";
 
+  try {
+    window.__ecoAuditScriptLoaded = true;
+    console.info("[CRO-674 Eco Audit] script loaded");
+  } catch (e) {
+    /* no-op */
+  }
+
   var CONFIG = {
     ecoAuditUrl:
       window.__ECO_AUDIT_TYP_URL__ || "https://eco-audit-ebon.vercel.app/",
@@ -14,20 +21,55 @@
     homeownerAnswerId: "a2f8b4ab-f96c-11e4-824b-22000a699fb3",
     propertyTypeAnswerId: "128a72ad-041e-11ed-a6b2-062f1bcd6de3",
     postcodeAnswerKey: "answers[primary_address_postalcode]",
-    blockExistingRedirect: true,
   };
 
   var LOG_PREFIX = "[CRO-674 Eco Audit]";
   var alreadyApplied = false;
-  var controlledRedirectValue = "";
+  var debugEvents = (window.__ecoAuditDebugEvents = window.__ecoAuditDebugEvents || []);
+
+  function isDebugEnabled() {
+    var search = "";
+    try {
+      search = String(window.location && window.location.search ? window.location.search : "");
+    } catch (e) {
+      /* no-op */
+    }
+    return (
+      CONFIG.debug === true ||
+      /(?:\?|&)ecoAuditDebug=(1|true)(?:&|$)/i.test(search) ||
+      /(?:\?|&)optly_qa=true(?:&|$)/i.test(search)
+    );
+  }
 
   function log() {
-    if (!CONFIG.debug) return;
+    if (!isDebugEnabled()) return;
     try {
       var args = Array.prototype.slice.call(arguments);
+      debugEvents.push({
+        ts: new Date().toISOString(),
+        args: args.map(function (a) {
+          try {
+            return typeof a === "string" ? a : JSON.stringify(a);
+          } catch (_) {
+            return String(a);
+          }
+        }),
+      });
       args.unshift(LOG_PREFIX);
       console.log.apply(console, args);
     } catch (e) {
+      /* no-op */
+    }
+  }
+
+  function captureDebugEvent(label, payload) {
+    try {
+      debugEvents.push({
+        ts: new Date().toISOString(),
+        label: label,
+        payload: payload || null,
+      });
+    } catch (_) {
       /* no-op */
     }
   }
@@ -74,53 +116,15 @@
     return {};
   }
 
-  function installRedirectGuard() {
-    if (!CONFIG.blockExistingRedirect) return;
-    try {
-      Object.defineProperty(window, "redirectUrlAfterSubmission", {
-        configurable: true,
-        enumerable: true,
-        get: function () {
-          return controlledRedirectValue;
-        },
-        set: function (value) {
-          // Block existing redirect writes from page/chameleon scripts.
-          log("Blocked external redirect assignment:", value);
-        },
-      });
-      controlledRedirectValue = "";
-      window.redirectUrlAfterSubmission = "";
-    } catch (e) {
-      // If defineProperty fails, fallback to blanking current value.
-      controlledRedirectValue = "";
-      try {
-        window.redirectUrlAfterSubmission = "";
-      } catch (_) {
-        /* no-op */
-      }
-    }
-  }
-
   function setControlledRedirect(url) {
-    controlledRedirectValue = toString(url);
+    var finalUrl = toString(url);
     try {
-      // Re-define with same guard semantics but updated internal value.
-      Object.defineProperty(window, "redirectUrlAfterSubmission", {
-        configurable: true,
-        enumerable: true,
-        get: function () {
-          return controlledRedirectValue;
-        },
-        set: function (value) {
-          log("Blocked external redirect assignment:", value);
-        },
-      });
+      window.redirectUrlAfterSubmission = finalUrl;
+      captureDebugEvent("redirect-set", { redirectUrl: finalUrl });
+      log("Redirect assigned", { redirectUrl: finalUrl });
     } catch (e) {
-      try {
-        window.redirectUrlAfterSubmission = controlledRedirectValue;
-      } catch (_) {
-        /* no-op */
-      }
+      captureDebugEvent("redirect-set-failed", { error: e && e.message, redirectUrl: finalUrl });
+      log("Redirect assignment failed", { error: e && e.message, redirectUrl: finalUrl });
     }
   }
 
@@ -130,7 +134,9 @@
       var endpoint = CONFIG.locationLookupEndpoint;
       var separator = endpoint.indexOf("?") === -1 ? "?" : "&";
       var url = endpoint + separator + "postcode=" + encodeURIComponent(postcode.replace(/\s+/g, ""));
+      log("Running custom postcode lookup", { postcode: postcode, url: url });
       return fetchWithTimeout(url, CONFIG.lookupTimeoutMs).then(function (payload) {
+        log("Custom postcode lookup success", payload);
         return {
           uprn: toString(payload && payload.uprn),
           lat: toString(payload && payload.lat),
@@ -146,8 +152,10 @@
     var postcodesIoUrl =
       "https://api.postcodes.io/postcodes/" +
       encodeURIComponent(postcode.replace(/\s+/g, ""));
+    log("Running postcodes.io lookup", { postcode: postcode, url: postcodesIoUrl });
     return fetchWithTimeout(postcodesIoUrl, CONFIG.lookupTimeoutMs)
       .then(function (payload) {
+        log("postcodes.io lookup success", payload);
         var result = payload && payload.result ? payload.result : {};
         return {
           uprn: "",
@@ -159,6 +167,7 @@
         };
       })
       .catch(function () {
+        log("postcodes.io lookup failed");
         return {
           uprn: "",
           lat: "",
@@ -178,9 +187,14 @@
     return fetch(url, { signal: controller.signal })
       .then(function (res) {
         if (!res.ok) {
+          log("Lookup HTTP error", { url: url, status: res.status });
           throw new Error("Lookup failed: " + res.status);
         }
         return res.json();
+      })
+      .catch(function (err) {
+        log("Lookup failed/aborted", { url: url, timeoutMs: timeoutMs, error: err && err.message });
+        throw err;
       })
       .finally(function () {
         clearTimeout(timeoutId);
@@ -208,14 +222,17 @@
 
   function applyRedirectOverride(submissionEvent) {
     if (alreadyApplied) return;
+    log("Submission event captured", submissionEvent);
     var answers = (submissionEvent && submissionEvent.answers) || {};
     var postcodeRaw =
       answers.primary_address_postalcode ||
       answers[CONFIG.postcodeAnswerKey] ||
       "";
     var postcode = normalizePostcode(postcodeRaw);
+    log("Postcode extracted from answers", { raw: postcodeRaw, normalized: postcode });
     if (!postcode) {
       log("No postcode available in submission payload.");
+      captureDebugEvent("postcode-missing");
       return;
     }
 
@@ -233,6 +250,8 @@
       hev: asBoolean01(hasEvRaw),
     };
     setControlledRedirect(buildEcoAuditUrl(immediatePayload));
+    log("Immediate postcode-only redirect set", immediatePayload);
+    captureDebugEvent("postcode-only-redirect", immediatePayload);
     alreadyApplied = true;
 
     lookupLocationFromPostcode(postcode)
@@ -255,6 +274,8 @@
 
         var redirectUrl = buildEcoAuditUrl(payload);
         setControlledRedirect(redirectUrl);
+        log("Redirect upgraded with lookup data", payload);
+        captureDebugEvent("lookup-redirect", payload);
 
         window.dataLayer = window.dataLayer || [];
         var opty = getOptimizelyInfo();
@@ -270,6 +291,7 @@
       })
       .catch(function (err) {
         log("Lookup failed; using default TYP.", err && err.message);
+        captureDebugEvent("lookup-failed", { error: err && err.message });
       });
   }
 
@@ -280,6 +302,12 @@
     // Catch future pushes.
     window.dataLayer.push = function () {
       var args = Array.prototype.slice.call(arguments);
+      log("dataLayer.push intercepted", args);
+      captureDebugEvent("datalayer-push", {
+        events: args.map(function (a) {
+          return a && a.event ? a.event : null;
+        }),
+      });
       for (var i = 0; i < args.length; i++) {
         if (isSubmissionEvent(args[i])) {
           applyRedirectOverride(args[i]);
@@ -297,6 +325,14 @@
     }
   }
 
-  installRedirectGuard();
   attachDataLayerListener();
+  captureDebugEvent("script-initialized", {
+    debugEnabled: isDebugEnabled(),
+    ecoAuditUrl: CONFIG.ecoAuditUrl,
+  });
+  log("Eco Audit script initialized", {
+    debugEnabled: isDebugEnabled(),
+    ecoAuditUrl: CONFIG.ecoAuditUrl,
+    locationLookupEndpoint: CONFIG.locationLookupEndpoint || "postcodes.io fallback",
+  });
 })();
