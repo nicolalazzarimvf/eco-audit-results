@@ -299,28 +299,98 @@
 
     var root = document.getElementById("eco-audit-app-root");
     if (!root) {
-      var host =
-        document.querySelector("main") ||
-        document.querySelector("#content") ||
-        document.querySelector(".container") ||
-        document.body;
-
-      if (!host) return null;
-
-      // Keep the original redirect page DOM host, but clear its visible content.
-      host.innerHTML =
-        '<div id="eco-audit-app-root" style="min-height:100vh;background:#edf4f8;padding:0;margin:0;">' +
+      root = document.createElement("div");
+      root.id = "eco-audit-app-root";
+      root.style.minHeight = "100vh";
+      root.style.background = "#edf4f8";
+      root.style.padding = "0";
+      root.style.margin = "0 0 18px";
+      root.innerHTML =
         '<section id="eco-audit-injected-block" style="max-width:1140px;margin:0 auto;padding:18px 16px 28px;">' +
         '<div id="eco-audit-panel-shell"></div>' +
         '<div id="eco-audit-report-shell"></div>' +
-        "</section>" +
-        "</div>";
-      root = document.getElementById("eco-audit-app-root");
-      captureDebugEvent("typ-page-host-emptied-and-eco-audit-mounted");
+        "</section>";
+
+      var anchor =
+        document.querySelector("main") ||
+        document.querySelector("#content") ||
+        document.querySelector(".container");
+
+      if (anchor && anchor.parentNode) {
+        anchor.parentNode.insertBefore(root, anchor);
+        captureDebugEvent("typ-root-inserted-before-main");
+      } else if (document.body) {
+        document.body.insertBefore(root, document.body.firstChild);
+        captureDebugEvent("typ-root-inserted-before-body-first-child");
+      } else {
+        return null;
+      }
     }
 
-    if (!root) return null;
     return document.getElementById("eco-audit-injected-block");
+  }
+
+  function isTypReportMounted() {
+    return Boolean(document.getElementById("eco-audit-results-iframe"));
+  }
+
+  function mountTypReportWithRetry(url) {
+    if (!isProjectSolarTypPage || !url) {
+      return Promise.resolve(false);
+    }
+
+    var delays = [0, 150, 400, 800, 1500, 3000];
+    var attemptIndex = 0;
+
+    function runAttempt() {
+      if (isTypReportMounted()) {
+        return Promise.resolve(true);
+      }
+      if (attemptIndex >= delays.length) {
+        captureDebugEvent("typ-mount-gave-up", { url: url });
+        return Promise.resolve(false);
+      }
+
+      var delayMs = delays[attemptIndex];
+      if (attemptIndex > 0) {
+        captureDebugEvent("typ-mount-retry", { attempt: attemptIndex, delayMs: delayMs });
+      }
+      attemptIndex += 1;
+
+      return waitMs(delayMs).then(function () {
+        return mountDetailedReportInContent(url).then(function () {
+          if (isTypReportMounted()) {
+            return true;
+          }
+          return runAttempt();
+        });
+      });
+    }
+
+    if (document.readyState !== "complete") {
+      window.addEventListener(
+        "load",
+        function onWindowLoad() {
+          if (isTypReportMounted()) return;
+          captureDebugEvent("typ-mount-retry", { attempt: "load", delayMs: 0 });
+          mountDetailedReportInContent(url);
+        },
+        { once: true }
+      );
+    }
+
+    return runAttempt();
+  }
+
+  function mountTypReportFromPayload(payload) {
+    return mountTypReportWithRetry(buildDetailedReportUrl(payload));
+  }
+
+  function maybeRemountTypReportFromPayload() {
+    if (!isProjectSolarTypPage) return;
+    var payload = getPayloadFromCurrentUrl() || getPayloadFromDataLayer() || readStoredPayload();
+    if (!payload || !payload.postcode) return;
+    mountTypReportFromPayload(payload);
   }
 
   function getPanelMountElement() {
@@ -659,7 +729,7 @@
           confirmBtn.disabled = true;
           runAddressSubmitLoader()
             .then(function () {
-              return mountDetailedReportInContent(detailedUrl);
+              return mountTypReportWithRetry(detailedUrl);
             })
             .then(function () {
               if (!isProjectSolarTypPage) {
@@ -947,7 +1017,7 @@
       return;
     }
     keepRedirectDisabled(25000);
-    mountDetailedReportInContent(buildDetailedReportUrl(immediatePayload));
+    mountTypReportFromPayload(immediatePayload);
     renderPostcodePanel(immediatePayload);
     log("In-modal postcode panel started", immediatePayload);
     captureDebugEvent("in-modal-postcode-panel-started", immediatePayload);
@@ -970,7 +1040,7 @@
         renderPostcodePanel(payload);
         if (isProjectSolarTypPage) {
           // Refresh the same iframe container with enriched coordinates.
-          mountDetailedReportInContent(buildDetailedReportUrl(payload));
+          mountTypReportFromPayload(payload);
         }
         log("Postcode panel refreshed with lookup data", payload);
         captureDebugEvent("postcode-panel-with-lookup", payload);
@@ -1008,8 +1078,12 @@
         }),
       });
       for (var i = 0; i < args.length; i++) {
-        if (isSubmissionEvent(args[i])) {
-          applyRedirectOverride(args[i]);
+        var item = args[i];
+        if (isSubmissionEvent(item)) {
+          applyRedirectOverride(item);
+        }
+        if (item && item.event === "thankYouPageRequested") {
+          maybeRemountTypReportFromPayload();
         }
       }
       return originalPush.apply(window.dataLayer, args);
@@ -1032,14 +1106,14 @@
 
     alreadyApplied = true;
     keepRedirectDisabled(25000);
-    mountDetailedReportInContent(buildDetailedReportUrl(payload));
+    mountTypReportFromPayload(payload);
     renderPostcodePanel(payload);
 
     var mount = function (finalPayload) {
       keepRedirectDisabled(20000);
       renderPostcodePanel(finalPayload);
       if (isProjectSolarTypPage) {
-        mountDetailedReportInContent(buildDetailedReportUrl(finalPayload));
+        mountTypReportFromPayload(finalPayload);
       }
       captureDebugEvent("bootstrap-panel-mounted", finalPayload);
     };
