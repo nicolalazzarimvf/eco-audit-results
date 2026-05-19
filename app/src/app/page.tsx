@@ -6,10 +6,16 @@ import { derive } from "@/lib/calculations";
 import EpcCard from "@/components/EpcCard";
 import SolarCard from "@/components/SolarCard";
 import PropertyValueCard from "@/components/PropertyValueCard";
-import OpportunityCard from "@/components/OpportunityCard";
 import SatelliteMapCard from "@/components/SatelliteMapCard";
 import IframeHeightBridge from "@/components/IframeHeightBridge";
 import AddressRefinementCard from "@/components/AddressRefinementCard";
+import ReportHeader from "@/components/report/ReportHeader";
+import KpiSummaryGrid from "@/components/report/KpiSummaryGrid";
+import ReportSection from "@/components/report/ReportSection";
+import InsulationInsights from "@/components/report/InsulationInsights";
+import HeatingInsights from "@/components/report/HeatingInsights";
+import ExistingFeatures from "@/components/report/ExistingFeatures";
+import TopOpportunities from "@/components/report/TopOpportunities";
 
 interface PageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -184,231 +190,205 @@ export default async function Page({ searchParams }: PageProps) {
   const isDetailedView = sp(params.reportView) === "detailed";
   const formatMoney = (value: number) => `£${Math.round(value || 0).toLocaleString("en-GB")}`;
   const annualSaving = derived?.totalAnnualOpportunityGbp ?? 0;
-  const propertyValueAvg = derived?.lrAreaAvgGbp ?? 0;
   const systemSize = derived?.recommendedSolar?.kWp ?? 0;
-  const payback = derived?.recommendedSolar?.paybackYrs ?? 0;
 
   const showProminentAvgAddressCard = isDetailedView && !hasAddressLevelAccuracy && Boolean(postcode);
 
+  const titleAccent =
+    usingSimilarHouseAverage && !isAddressAccuracy
+      ? `homes like yours in ${postcode || "your area"}`
+      : address || postcode || "your property";
+
+  const co2Tonnes =
+    epc && epc.co2EmissionsCurrentT > epc.co2EmissionsPotentialT
+      ? `${(epc.co2EmissionsCurrentT - epc.co2EmissionsPotentialT).toFixed(1)}t`
+      : derived
+        ? `${Math.max(0.1, derived.co2SavingTYr).toFixed(1)}t`
+        : "—";
+
+  const efficiencyScore =
+    epc && epc.currentScore > 0
+      ? `${Math.round(((epc.potentialScore - epc.currentScore) / epc.currentScore) * 100)}%`
+      : "—";
+
+  if (!isDetailedView) {
+    return (
+      <main style={{ maxWidth: 980, margin: "0 auto", padding: "24px 16px 48px" }}>
+        <IframeHeightBridge />
+        <h1 style={{ fontSize: 44, fontWeight: 800, marginBottom: 12 }}>
+          Your personalised Eco Audit for {titleAccent}
+        </h1>
+        {solar && derived ? <SolarCard solar={solar} derived={derived} /> : <SatelliteMapCard lat={lat} lng={lng} address={address} mapUrl={mapUrl} />}
+        {epc && derived && <EpcCard epc={epc} derived={derived} />}
+        {landRegistry && derived && <PropertyValueCard lr={landRegistry} derived={derived} />}
+      </main>
+    );
+  }
+
   return (
-    <main style={{ maxWidth: isDetailedView ? 1140 : 980, margin: "0 auto", padding: "24px 16px 48px" }}>
+    <div className="report-page">
       <IframeHeightBridge />
-      {/* Header */}
-      <div style={{ marginBottom: 20 }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            gap: 16,
-            flexWrap: "wrap",
-          }}
-        >
-          <div style={{ flex: "1 1 280px", minWidth: 0 }}>
-            <div style={{ fontSize: 12, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>
-              Eco Audit Report
-            </div>
-            <h1 style={{ fontSize: isDetailedView ? 42 : 44, fontWeight: 800, lineHeight: 1.18, letterSpacing: "-0.02em", marginBottom: 6 }}>
-              {usingSimilarHouseAverage && !isAddressAccuracy
-                ? `Your personalised Eco Audit for homes like yours in ${postcode || "your area"}`
-                : `Your personalised Eco Audit for ${address || "your property"}`}
-            </h1>
-            <p style={{ margin: "4px 0 0", fontSize: 17, color: "var(--muted)", lineHeight: 1.45, maxWidth: 560 }}>
-              {"Here's how much you could save by making your home more energy efficient."}
-            </p>
-            {postcode ? (
-              <div style={{ fontSize: 18, color: "var(--muted)", marginTop: 8 }}>{postcode}</div>
-            ) : null}
+      <ReportHeader />
+
+      <div className="report-container">
+        <header className="report-hero">
+          <div className="report-hero-top">
+            <span className="report-eyebrow">Your savings report</span>
+            <span className="report-mode-pill">
+              {hasAddressLevelAccuracy ? "ADDRESS mode" : "AVG mode"}
+            </span>
           </div>
+          <h1 className="report-title">
+            Your personalised Eco Audit for{" "}
+            <span className="report-title-accent">{titleAccent}</span>
+          </h1>
+          <p className="report-subtitle">
+            Here&apos;s how much you could save by making your home more energy efficient.
+            {postcode ? ` Postcode: ${postcode}.` : ""}
+          </p>
+        </header>
+
+        {!hasAddressLevelAccuracy && postcode ? (
+          <AddressRefinementCard
+            postcode={postcode}
+            monthlyBill={auditParams.bill}
+            hasEv={auditParams.hasEv}
+            prominentLayout={showProminentAvgAddressCard}
+          />
+        ) : null}
+
+        {derived ? (
+          <KpiSummaryGrid
+            annualSaving={formatMoney(annualSaving)}
+            solarKwp={`${systemSize.toFixed(1)} kWp`}
+            co2Tonnes={co2Tonnes}
+            efficiencyScore={efficiencyScore}
+          />
+        ) : null}
+
+        <nav className="report-nav-pills" aria-label="Report sections">
+          <a href="#solar-section">Solar</a>
+          <a href="#insulation-section">Insulation</a>
+          <a href="#heating-section">Heating</a>
+          <a href="#ev-section">EV charging</a>
+          <a href="#opportunities-section">Opportunities</a>
+        </nav>
+
+        {errors.length > 0 && (
           <div
             style={{
-              padding: "7px 10px",
-              borderRadius: 999,
-              border: "1px solid #cfe2eb",
-              background: "#fff",
-              color: "#0f455a",
+              background: "#fde8e8",
+              border: "1px solid #fbd2d0",
+              borderRadius: 10,
+              padding: 12,
+              marginBottom: 16,
               fontSize: 12,
-              fontWeight: 700,
-              flexShrink: 0,
+              color: "#8e130b",
             }}
           >
-            {hasAddressLevelAccuracy ? "ADDRESS mode" : "AVG mode"}
-          </div>
-        </div>
-      </div>
-
-      {!hasAddressLevelAccuracy && postcode ? (
-        <AddressRefinementCard
-          postcode={postcode}
-          monthlyBill={auditParams.bill}
-          hasEv={auditParams.hasEv}
-          prominentLayout={showProminentAvgAddressCard}
-        />
-      ) : null}
-
-      {usingSimilarHouseAverage && !isAddressAccuracy && !showProminentAvgAddressCard ? (
-        <div
-          style={{
-            background: "#eaf7ff",
-            border: "1px solid #c8e3f5",
-            borderRadius: 10,
-            padding: 12,
-            marginBottom: 14,
-            color: "#1d4f68",
-            fontSize: 13,
-          }}
-        >
-          Showing postcode-average values based on a similar nearby property profile. Select your
-          exact address below for house-specific calculations.
-        </div>
-      ) : null}
-
-      {isDetailedView && (
-        <div
-          style={{
-            background: "linear-gradient(180deg, #f7fcff 0%, #f5fbf9 100%)",
-            border: "1px solid #ddebf2",
-            borderRadius: 16,
-            padding: 14,
-            marginBottom: 16,
-          }}
-        >
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
-            {[
-              ["Annual savings", formatMoney(annualSaving)],
-              ["Avg home value", formatMoney(propertyValueAvg)],
-              ["Suggested solar size", `${systemSize.toFixed(1)} kWp`],
-              ["Estimated payback", `${payback || 0} years`],
-            ].map(([label, value]) => (
-              <div key={label} style={{ background: "#fff", border: "1px solid #dce8ef", borderRadius: 10, padding: "10px 12px" }}>
-                <div style={{ fontSize: 11, color: "#5c7381", textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</div>
-                <div style={{ fontSize: 20, fontWeight: 800, color: "#0f3646", marginTop: 2 }}>{value}</div>
-              </div>
+            {errors.map((e) => (
+              <div key={e}>{e}</div>
             ))}
           </div>
-        </div>
-      )}
+        )}
 
-      {isDetailedView && (
-        <nav
-          style={{
-            position: "sticky",
-            top: 10,
-            zIndex: 2,
-            background: "#f2fbff",
-            border: "1px solid #d8e8ef",
-            borderRadius: 12,
-            padding: 8,
-            marginBottom: 16,
-            display: "flex",
-            gap: 8,
-            flexWrap: "wrap",
-          }}
+        <ReportSection
+          id="solar-section"
+          title="Your solar potential"
+          ctaLabel="Get your solar panels quote here"
+          ctaHref="https://www.theecoexperts.co.uk/solar-panels"
         >
-          {[
-            ["#solar-section", "Solar"],
-            ["#insulation-section", "Insulation"],
-            ["#heating-section", "Heating"],
-            ["#ev-section", "EV charging"],
-          ].map(([href, label]) => (
-            <a
-              key={href}
-              href={href}
-              style={{
-                padding: "7px 12px",
-                borderRadius: 999,
-                textDecoration: "none",
-                fontSize: 13,
-                fontWeight: 600,
-                color: "#0d3f53",
-                background: "#fff",
-                border: "1px solid #cce0ea",
-              }}
-            >
-              {label}
-            </a>
-          ))}
-        </nav>
-      )}
+          {solar && derived ? (
+            <SolarCard solar={solar} derived={derived} />
+          ) : (
+            <SatelliteMapCard lat={lat} lng={lng} address={address} mapUrl={mapUrl} />
+          )}
+        </ReportSection>
 
-      {/* Data errors (non-blocking) */}
-      {errors.length > 0 && (
-        <div
-          style={{
-            background: "#fbd2d0",
-            border: "1px solid #fbd2d0",
-            borderRadius: 8,
-            padding: 12,
-            marginBottom: 16,
-            fontSize: 12,
-            color: "#8e130b",
-          }}
-        >
-          {errors.map((e) => <div key={e}>{e}</div>)}
-        </div>
-      )}
-
-      {/* Cards */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-        <section id="solar-section" style={{ background: isDetailedView ? "#f6fcff" : "transparent", borderRadius: 14, padding: isDetailedView ? 14 : 0 }}>
-          {solar && derived ? <SolarCard solar={solar} derived={derived} /> : <SatelliteMapCard lat={lat} lng={lng} address={address} mapUrl={mapUrl} />}
-        </section>
-
-        <section id="insulation-section" style={{ background: isDetailedView ? "#f7fcfa" : "transparent", borderRadius: 14, padding: isDetailedView ? 14 : 0 }}>
-          {epc && derived && <EpcCard epc={epc} derived={derived} />}
-          {derived && <OpportunityCard epc={epc} derived={derived} />}
-        </section>
-
-        <section id="heating-section" style={{ background: isDetailedView ? "#f6fbff" : "transparent", borderRadius: 14, padding: isDetailedView ? 14 : 0 }}>
-          {landRegistry && derived && <PropertyValueCard lr={landRegistry} derived={derived} />}
-        </section>
-
-        <section id="ev-section" style={{ background: isDetailedView ? "#f6fbff" : "transparent", borderRadius: 14, padding: isDetailedView ? 14 : 0 }}>
-          <div
-            style={{
-              background: "var(--surface)",
-              border: "1px solid var(--border)",
-              borderRadius: 16,
-              boxShadow: "var(--card-shadow)",
-              padding: 16,
-            }}
+        {epc && derived ? (
+          <ReportSection
+            id="insulation-section"
+            title="Windows & insulation insights"
+            ctaLabel="Get insulation quotes"
+            ctaHref="https://www.theecoexperts.co.uk/insulation"
           >
-            <h3 style={{ margin: 0, fontSize: 20, color: "#123746" }}>EV charging</h3>
-            <p style={{ margin: "6px 0 10px", color: "var(--muted)" }}>
-              Charging suitability estimated from your home energy profile and likely solar production.
-            </p>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 }}>
-              <div style={{ border: "1px solid #d7e5ee", borderRadius: 10, padding: 10, background: "#fff" }}>
-                <div style={{ fontSize: 11, color: "#5a7280" }}>EV profile</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: "#0e3443" }}>{auditParams.hasEv ? "Active EV home" : "EV-ready home"}</div>
+            <InsulationInsights epc={epc} />
+            <div style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid #e2ebf2" }}>
+              <EpcCard epc={epc} derived={derived} />
+            </div>
+          </ReportSection>
+        ) : null}
+
+        {epc && derived ? (
+          <ReportSection
+            id="heating-section"
+            title="Heating system insights"
+            ctaLabel="Find a heat pump installer"
+            ctaHref="https://www.theecoexperts.co.uk/heat-pumps"
+          >
+            <HeatingInsights epc={epc} derived={derived} />
+            {landRegistry ? (
+              <div style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid #e2ebf2" }}>
+                <PropertyValueCard lr={landRegistry} derived={derived} />
               </div>
-              <div style={{ border: "1px solid #d7e5ee", borderRadius: 10, padding: 10, background: "#fff" }}>
-                <div style={{ fontSize: 11, color: "#5a7280" }}>Suggested annual offset</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: "#0e3443" }}>
-                  {formatMoney((derived?.recommendedSolar?.totalAnnualGbp || 0) * 0.35)}
-                </div>
-              </div>
-              <div style={{ border: "1px solid #d7e5ee", borderRadius: 10, padding: 10, background: "#fff" }}>
-                <div style={{ fontSize: 11, color: "#5a7280" }}>Best charging window</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: "#0e3443" }}>Overnight + solar peak</div>
+            ) : null}
+          </ReportSection>
+        ) : landRegistry && derived ? (
+          <ReportSection id="heating-section" title="Property value context">
+            <PropertyValueCard lr={landRegistry} derived={derived} />
+          </ReportSection>
+        ) : null}
+
+        <ReportSection
+          id="ev-section"
+          title="EV & smart charging"
+          ctaLabel="Find an EV charger installer"
+          ctaHref="https://www.theecoexperts.co.uk/ev-charging"
+        >
+          <div className="report-ev-grid">
+            <div className="report-ev-stat">
+              <div className="report-ev-stat-label">EV profile</div>
+              <div className="report-ev-stat-value">
+                {auditParams.hasEv ? "Active EV home" : "EV-ready home"}
               </div>
             </div>
+            <div className="report-ev-stat">
+              <div className="report-ev-stat-label">Suggested annual offset</div>
+              <div className="report-ev-stat-value">
+                {formatMoney((derived?.recommendedSolar?.totalAnnualGbp || 0) * 0.35)}
+              </div>
+            </div>
+            <div className="report-ev-stat">
+              <div className="report-ev-stat-label">Best charging window</div>
+              <div className="report-ev-stat-value">Overnight + solar peak</div>
+            </div>
           </div>
-        </section>
+        </ReportSection>
+
+        {epc ? (
+          <ReportSection id="features-section" title="Your existing green features">
+            <ExistingFeatures epc={epc} hasEv={Boolean(auditParams.hasEv)} />
+          </ReportSection>
+        ) : null}
+
+        {derived ? (
+          <ReportSection id="opportunities-section" title="Your top 3 opportunities">
+            <TopOpportunities epc={epc} derived={derived} />
+          </ReportSection>
+        ) : null}
 
         {!epc && !solar && !landRegistry && (
-          <div style={{ padding: 40, textAlign: "center", color: "var(--muted)" }}>
+          <p style={{ textAlign: "center", color: "var(--muted)", padding: 40 }}>
             No data could be retrieved for this property.
-          </div>
+          </p>
         )}
-      </div>
 
-      {/* Footer */}
-      <div style={{ marginTop: 32, fontSize: 11, color: "var(--muted)", lineHeight: 1.6 }}>
-        Data sources: Energy Performance of Buildings Register · Google Solar API · HM Land Registry Price Paid Data.
-        Savings are estimates based on standard assumptions (£0.29/kWh electricity, £0.15/kWh SEG export, 3.2 ASHP COP).
-        Install costs and savings will vary.
+        <footer className="report-footer">
+          Data sources: Energy Performance of Buildings Register · Google Solar API · HM Land
+          Registry Price Paid Data. Savings are estimates based on standard assumptions (£0.29/kWh
+          electricity, £0.15/kWh SEG export, 3.2 ASHP COP). Install costs and savings will vary.
+        </footer>
       </div>
-    </main>
+    </div>
   );
 }

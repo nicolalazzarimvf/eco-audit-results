@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Be_Vietnam_Pro } from "next/font/google";
 import "./globals.css";
+import "@/components/report/report.css";
 
 export const metadata: Metadata = {
   title: "Your Eco Audit",
